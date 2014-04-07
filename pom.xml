@@ -34,6 +34,13 @@
 		</dependency>
 	</dependencies>
 
+	<scm>
+		<connection>scm:git:git://github.com/fiji/Feature_Detection</connection>
+		<developerConnection>scm:git:git@github.com:fiji/Feature_Detection</developerConnection>
+		<tag>HEAD</tag>
+		<url>https://github.com/fiji/Feature_Detection</url>
+	</scm>
+
 	<repositories>
 		<!-- NB: for project parent, in case of partial checkout -->
 		<repository>
