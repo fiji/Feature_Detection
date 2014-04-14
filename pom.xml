@@ -34,6 +34,11 @@
 		</dependency>
 	</dependencies>
 
+	<ciManagement>
+		<system>Jenkins</system>
+		<url>http://jenkins.imagej.net/job/Feature_Detection/</url>
+	</ciManagement>
+
 	<scm>
 		<connection>scm:git:git://github.com/fiji/Feature_Detection</connection>
 		<developerConnection>scm:git:git@github.com:fiji/Feature_Detection</developerConnection>
