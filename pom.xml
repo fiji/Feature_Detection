@@ -21,7 +21,6 @@
 		<dependency>
 			<groupId>${jama.groupId}</groupId>
 			<artifactId>jama</artifactId>
-			<version>${jama.version}</version>
 		</dependency>
 		<dependency>
 			<groupId>net.imagej</groupId>
@@ -30,7 +29,6 @@
 		<dependency>
 			<groupId>sc.fiji</groupId>
 			<artifactId>legacy-imglib1</artifactId>
-			<version>${legacy-imglib1.version}</version>
 		</dependency>
 	</dependencies>
 
