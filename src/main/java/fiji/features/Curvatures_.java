@@ -21,31 +21,26 @@
 
 package fiji.features;
 
-import ij.plugin.PlugIn;
+import Jama.EigenvalueDecomposition;
+import Jama.Matrix;
 import ij.IJ;
 import ij.ImagePlus;
+import ij.plugin.PlugIn;
 
-import java.util.Arrays;
 import java.util.ArrayList;
-import java.util.List;
-import java.util.Comparator;
 import java.util.Collections;
+import java.util.Comparator;
 
+import mpicbg.imglib.algorithm.gauss.GaussianConvolutionReal;
+import mpicbg.imglib.container.array.ArrayContainerFactory;
+import mpicbg.imglib.cursor.LocalizableByDimCursor;
 import mpicbg.imglib.image.Image;
 import mpicbg.imglib.image.ImageFactory;
 import mpicbg.imglib.image.ImagePlusAdapter;
+import mpicbg.imglib.image.display.imagej.ImageJFunctions;
+import mpicbg.imglib.outofbounds.OutOfBoundsStrategyMirrorFactory;
 import mpicbg.imglib.type.numeric.RealType;
 import mpicbg.imglib.type.numeric.real.FloatType;
-import mpicbg.imglib.algorithm.gauss.GaussianConvolution;
-import mpicbg.imglib.algorithm.gauss.GaussianConvolutionReal;
-import mpicbg.imglib.outofbounds.OutOfBoundsStrategy;
-import mpicbg.imglib.outofbounds.OutOfBoundsStrategyMirrorFactory;
-import mpicbg.imglib.image.display.imagej.ImageJFunctions;
-import mpicbg.imglib.container.array.ArrayContainerFactory;
-import mpicbg.imglib.cursor.LocalizableByDimCursor;
-
-import Jama.Matrix;
-import Jama.EigenvalueDecomposition;
 
 public class Curvatures_<T extends RealType<T>> implements PlugIn {
 

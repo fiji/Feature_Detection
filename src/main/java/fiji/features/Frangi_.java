@@ -21,41 +21,36 @@
 
 package fiji.features;
 
-import ij.plugin.PlugIn;
+import Jama.EigenvalueDecomposition;
+import Jama.Matrix;
 import ij.IJ;
 import ij.ImagePlus;
 import ij.gui.GenericDialog;
 import ij.measure.Calibration;
+import ij.plugin.PlugIn;
 
 import java.text.DecimalFormat;
-
-import java.util.Arrays;
 import java.util.ArrayList;
-import java.util.List;
-import java.util.Comparator;
 import java.util.Collections;
+import java.util.Comparator;
+import java.util.List;
 import java.util.concurrent.Callable;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.Future;
 
-import mpicbg.imglib.image.Image;
-import mpicbg.imglib.image.ImageFactory;
-import mpicbg.imglib.image.ImagePlusAdapter;
-import mpicbg.imglib.type.numeric.RealType;
-import mpicbg.imglib.type.numeric.real.FloatType;
-import mpicbg.imglib.type.numeric.integer.ByteType;
-import mpicbg.imglib.algorithm.gauss.GaussianConvolution;
 import mpicbg.imglib.algorithm.gauss.GaussianConvolutionReal;
-import mpicbg.imglib.outofbounds.OutOfBoundsStrategy;
-import mpicbg.imglib.outofbounds.OutOfBoundsStrategyMirrorFactory;
-import mpicbg.imglib.image.display.imagej.ImageJFunctions;
 import mpicbg.imglib.container.array.ArrayContainerFactory;
 import mpicbg.imglib.cursor.LocalizableByDimCursor;
 import mpicbg.imglib.cursor.LocalizableCursor;
-
-import Jama.Matrix;
-import Jama.EigenvalueDecomposition;
+import mpicbg.imglib.image.Image;
+import mpicbg.imglib.image.ImageFactory;
+import mpicbg.imglib.image.ImagePlusAdapter;
+import mpicbg.imglib.image.display.imagej.ImageJFunctions;
+import mpicbg.imglib.outofbounds.OutOfBoundsStrategyMirrorFactory;
+import mpicbg.imglib.type.numeric.RealType;
+import mpicbg.imglib.type.numeric.integer.ByteType;
+import mpicbg.imglib.type.numeric.real.FloatType;
 
 public class Frangi_<T extends RealType<T>> implements PlugIn {
 
