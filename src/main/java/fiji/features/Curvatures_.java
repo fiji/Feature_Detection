@@ -31,20 +31,22 @@ import java.util.ArrayList;
 import java.util.Collections;
 import java.util.Comparator;
 
-import mpicbg.imglib.algorithm.gauss.GaussianConvolutionReal;
-import mpicbg.imglib.container.array.ArrayContainerFactory;
-import mpicbg.imglib.cursor.LocalizableByDimCursor;
-import mpicbg.imglib.image.Image;
-import mpicbg.imglib.image.ImageFactory;
-import mpicbg.imglib.image.ImagePlusAdapter;
-import mpicbg.imglib.image.display.imagej.ImageJFunctions;
-import mpicbg.imglib.outofbounds.OutOfBoundsStrategyMirrorFactory;
-import mpicbg.imglib.type.numeric.RealType;
-import mpicbg.imglib.type.numeric.real.FloatType;
+import net.imglib2.Cursor;
+import net.imglib2.RandomAccess;
+import net.imglib2.algorithm.gauss3.Gauss3;
+import net.imglib2.exception.IncompatibleTypeException;
+import net.imglib2.img.ImagePlusAdapter;
+import net.imglib2.img.Img;
+import net.imglib2.img.ImgFactory;
+import net.imglib2.img.array.ArrayImgFactory;
+import net.imglib2.img.display.imagej.ImageJFunctions;
+import net.imglib2.type.numeric.RealType;
+import net.imglib2.type.numeric.real.FloatType;
+import net.imglib2.view.Views;
 
 public class Curvatures_<T extends RealType<T>> implements PlugIn {
 
-	protected Image<T> image;
+	protected Img<T> image;
 
 	/* This comparator is useful for sorting a collection of Float
 	   objects by their absolute value, largest first */
@@ -60,30 +62,26 @@ public class Curvatures_<T extends RealType<T>> implements PlugIn {
 	    particular eigenvalue of the Hessian matrix at each point
 	    in the image. */
 
-	public ArrayList< Image<FloatType> > hessianEigenvalueImages( Image<T> input, float [] spacing ) {
+	public ArrayList< Img<FloatType> > hessianEigenvalueImages( Img<T> input, float [] spacing ) {
 
 		/* Various cursors may go outside the image, in which
 		   case we supply mirror values: */
 
-		OutOfBoundsStrategyMirrorFactory osmf = new OutOfBoundsStrategyMirrorFactory<T>();
+		Cursor<T> cursor = input.localizingCursor();
 
-		LocalizableByDimCursor<T> cursor = input.createLocalizableByDimCursor( osmf );
+		ImgFactory<FloatType> floatFactory = new ArrayImgFactory<FloatType>();
 
-		ImageFactory<FloatType> floatFactory = new ImageFactory<FloatType>(
-			new FloatType(),
-			new ArrayContainerFactory() );
+		ArrayList< Img<FloatType> > eigenvalueImages = new ArrayList< Img<FloatType> >();
+		ArrayList< RandomAccess<FloatType> > eCursors = new ArrayList< RandomAccess<FloatType> >();
 
-		ArrayList< Image<FloatType> > eigenvalueImages = new ArrayList< Image<FloatType> >();
-		ArrayList< LocalizableByDimCursor<FloatType> > eCursors = new ArrayList< LocalizableByDimCursor<FloatType> >();
-
-		int numberOfDimensions = input.getDimensions().length;
+		int numberOfDimensions = input.numDimensions();
 
 		/* Create an eigenvalue images and a cursor for each */
 
 		for( int i = 0; i < numberOfDimensions; ++i ) {
-			Image<FloatType> eigenvalueImage = floatFactory.createImage( input.getDimensions() );
+			Img<FloatType> eigenvalueImage = floatFactory.create( input, new FloatType() );
 			eigenvalueImages.add( eigenvalueImage );
-			eCursors.add( eigenvalueImage.createLocalizableByDimCursor() );
+			eCursors.add( eigenvalueImage.randomAccess() );
 		}
 
 		Matrix hessian = new Matrix( numberOfDimensions, numberOfDimensions );
@@ -91,8 +89,8 @@ public class Curvatures_<T extends RealType<T>> implements PlugIn {
 		/* Two cursors for finding points around the point of
 		   interest, used for calculating the second
 		   derivatives at that point: */
-		LocalizableByDimCursor<T> ahead = input.createLocalizableByDimCursor( osmf );
-		LocalizableByDimCursor<T> behind = input.createLocalizableByDimCursor( osmf );
+		RandomAccess<T> ahead = Views.extendMirrorSingle( input ).randomAccess();
+		RandomAccess<T> behind = Views.extendMirrorSingle( input ).randomAccess();
 
 		ReverseAbsoluteFloatComparator c = new ReverseAbsoluteFloatComparator();
 
@@ -103,8 +101,8 @@ public class Curvatures_<T extends RealType<T>> implements PlugIn {
 			for( int m = 0; m < numberOfDimensions; ++m )
 				for( int n = 0; n < numberOfDimensions; ++n ) {
 
-					ahead.moveTo( cursor );
-					behind.moveTo( cursor );
+					ahead.setPosition( cursor );
+					behind.setPosition( cursor );
 
 					ahead.fwd(m);
 					behind.bck(m);
@@ -112,12 +110,12 @@ public class Curvatures_<T extends RealType<T>> implements PlugIn {
 					ahead.fwd(n);
 					behind.fwd(n);
 
-					float firstDerivativeA = (ahead.getType().getRealFloat() - behind.getType().getRealFloat()) / (2 * spacing[m]);
+					float firstDerivativeA = (ahead.get().getRealFloat() - behind.get().getRealFloat()) / (2 * spacing[m]);
 
 					ahead.bck(n); ahead.bck(n);
 					behind.bck(n); behind.bck(n);
 
-					float firstDerivativeB = (ahead.getType().getRealFloat() - behind.getType().getRealFloat()) / (2 * spacing[m]);
+					float firstDerivativeB = (ahead.get().getRealFloat() - behind.get().getRealFloat()) / (2 * spacing[m]);
 
 					double value = (firstDerivativeA - firstDerivativeB) / (2 * spacing[n]);
 					hessian.set(m,n,value);
@@ -139,21 +137,11 @@ public class Curvatures_<T extends RealType<T>> implements PlugIn {
 			// Set the eigenvalues at the point of interest in each image:
 
 			for( int i = 0; i < numberOfDimensions; ++i ) {
-				LocalizableByDimCursor<FloatType> eCursor = eCursors.get(i);
-				eCursor.moveTo(cursor);
-				eCursor.getType().set( eigenvaluesArrayList.get(i).floatValue() );
+				RandomAccess<FloatType> eCursor = eCursors.get(i);
+				eCursor.setPosition(cursor);
+				eCursor.get().set( eigenvaluesArrayList.get(i).floatValue() );
 			}
 		}
-
-		// Remember to close all the cursors:
-
-		cursor.close();
-
-		ahead.close();
-		behind.close();
-
-		for( LocalizableByDimCursor<FloatType> eCursor : eCursors )
-			eCursor.close();
 
 		return eigenvalueImages;
 	}
@@ -168,35 +156,33 @@ public class Curvatures_<T extends RealType<T>> implements PlugIn {
 
 		float realSigma = 2;
 
-		image = ImagePlusAdapter.wrap(imagePlus);
+		image = (Img< T >)ImagePlusAdapter.wrap( imagePlus );
 
-		float [] spacing = image.getCalibration();
+		float[] spacing = new float[ image.numDimensions() ];
+		
+		spacing[ 0 ] = (float)imagePlus.getCalibration().pixelWidth;
+		spacing[ 1 ] = (float)imagePlus.getCalibration().pixelHeight;
+
+		if ( spacing.length > 2 )
+			spacing[ 2 ] = (float)imagePlus.getCalibration().pixelDepth;
 
 		double [] sigmas = new double[spacing.length];
 		for( int i = 0; i < spacing.length; ++i )
 			sigmas[i] = 1.0 / (double)spacing[i];
 
-		GaussianConvolutionReal<T> gauss = new GaussianConvolutionReal<T>( image, new OutOfBoundsStrategyMirrorFactory<T>(), sigmas );
-
-		gauss.setNumThreads( Runtime.getRuntime().availableProcessors() );
-
-		if ( !gauss.checkInput() || !gauss.process() )
+		final Img< T > result = image.factory().create( image, image.firstElement() );
+		try
 		{
-			IJ.error( "Gaussian Convolution failed: " + gauss.getErrorMessage() );
-			return;
+			Gauss3.gauss( sigmas, Views.extendMirrorSingle( image ), result );
 		}
+		catch (IncompatibleTypeException e) { e.printStackTrace(); }
 
-		final Image<T> result = gauss.getResult();
+		ImageJFunctions.wrap( result, "Blurred" ).duplicate().show();
 
-		ImageJFunctions.copyToImagePlus( result ).show();
+		ArrayList< Img<FloatType> > eigenvalueImages = hessianEigenvalueImages(result,spacing);
 
-		ArrayList< Image<FloatType> > eigenvalueImages = hessianEigenvalueImages(result,spacing);
-
-		for( Image<FloatType> resultImage : eigenvalueImages ) {
-			ImageJFunctions.copyToImagePlus( resultImage ).show();
+		for( Img<FloatType> resultImage : eigenvalueImages ) {
+			ImageJFunctions.wrap( resultImage, "EigenValues" ).duplicate().show();
 		}
-
-
 	}
-
 }

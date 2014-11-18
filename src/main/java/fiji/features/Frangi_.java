@@ -39,22 +39,23 @@ import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.Future;
 
-import mpicbg.imglib.algorithm.gauss.GaussianConvolutionReal;
-import mpicbg.imglib.container.array.ArrayContainerFactory;
-import mpicbg.imglib.cursor.LocalizableByDimCursor;
-import mpicbg.imglib.cursor.LocalizableCursor;
-import mpicbg.imglib.image.Image;
-import mpicbg.imglib.image.ImageFactory;
-import mpicbg.imglib.image.ImagePlusAdapter;
-import mpicbg.imglib.image.display.imagej.ImageJFunctions;
-import mpicbg.imglib.outofbounds.OutOfBoundsStrategyMirrorFactory;
-import mpicbg.imglib.type.numeric.RealType;
-import mpicbg.imglib.type.numeric.integer.ByteType;
-import mpicbg.imglib.type.numeric.real.FloatType;
+import net.imglib2.Cursor;
+import net.imglib2.RandomAccess;
+import net.imglib2.algorithm.gauss3.Gauss3;
+import net.imglib2.exception.IncompatibleTypeException;
+import net.imglib2.img.ImagePlusAdapter;
+import net.imglib2.img.Img;
+import net.imglib2.img.ImgFactory;
+import net.imglib2.img.array.ArrayImgFactory;
+import net.imglib2.img.display.imagej.ImageJFunctions;
+import net.imglib2.type.numeric.RealType;
+import net.imglib2.type.numeric.integer.ByteType;
+import net.imglib2.type.numeric.real.FloatType;
+import net.imglib2.view.Views;
 
 public class Frangi_<T extends RealType<T>> implements PlugIn {
 
-	protected Image<T> image;
+	protected Img<T> image;
 
 	/** A comparator for sorting floats by absolute value */
 
@@ -84,14 +85,14 @@ public class Frangi_<T extends RealType<T>> implements PlugIn {
 	/** A helper class for calculating the "vesselness" of an
 	   image, designed for use from ExecutorService */
 
-	public static class VesselnessCalculator< T extends RealType<T>> implements Callable< Image< FloatType> > {
+	public static class VesselnessCalculator< T extends RealType<T>> implements Callable< Img< FloatType> > {
 
 		protected double alpha = 0.5;
 		protected double beta = 0.5;
 
 		protected int scaleIndex;
 
-		protected final Image<T> inputImage;
+		protected final Img<T> inputImage;
 		protected final float [] spacing;
 		protected MultiTaskProgress progress;
 
@@ -106,31 +107,22 @@ public class Frangi_<T extends RealType<T>> implements PlugIn {
 			return maximumVesselness;
 		}
 
-		public long numberOfPoints( Image<T> image ) {
-			long totalPoints = 1;
-			int [] dimensions = image.getDimensions();
-			for( int length : dimensions ) {
-				totalPoints *= length;
-			}
-			return totalPoints;
-		}
-
-		public VesselnessCalculator( final Image<T> input, float [] spacing, int scaleIndex, MultiTaskProgress progress ) {
+		public VesselnessCalculator( final Img<T> input, float[] spacing, int scaleIndex, MultiTaskProgress progress ) {
 			this.inputImage = input;
 			this.spacing = spacing;
 			this.scaleIndex = scaleIndex;
 			this.progress = progress;
 		}
 
-		protected volatile Image<FloatType> result;
+		protected volatile Img<FloatType> result;
 
-		public Image<FloatType> getResult() {
+		public Img<FloatType> getResult() {
 			return result;
 		}
 
-		public Image< FloatType > call() throws Exception {
+		public Img< FloatType > call() throws Exception {
 
-			final Image<T> input = inputImage;
+			final Img<T> input = inputImage;
 			final float [] spacing = this.spacing;
 
 			// Denominators used in calculating the vesselness later:
@@ -139,20 +131,15 @@ public class Frangi_<T extends RealType<T>> implements PlugIn {
 
 			/* The cursors may go outside the image, in which case
 			   we supply mirror values: */
+			Cursor<T> cursor = input.localizingCursor();
 
-			OutOfBoundsStrategyMirrorFactory osmf = new OutOfBoundsStrategyMirrorFactory<T>();
+			ImgFactory<FloatType> floatFactory = new ArrayImgFactory<FloatType>();
 
-			LocalizableByDimCursor<T> cursor = input.createLocalizableByDimCursor( osmf );
+			Img<FloatType> resultImage = floatFactory.create( input, new FloatType() );
+			RandomAccess<FloatType> resultCursor = resultImage.randomAccess();
 
-			ImageFactory<FloatType> floatFactory = new ImageFactory<FloatType>(
-				new FloatType(),
-				new ArrayContainerFactory() );
-
-			Image<FloatType> resultImage = floatFactory.createImage( input.getDimensions() );
-			LocalizableByDimCursor<FloatType> resultCursor = resultImage.createLocalizableByDimCursor();
-
-			int numberOfDimensions = input.getDimensions().length;
-			long totalPoints = numberOfPoints(input);
+			int numberOfDimensions = input.numDimensions();
+			long totalPoints = input.size();
 			long reportingInterval = totalPoints / 100;
 
 			Matrix hessian = new Matrix( numberOfDimensions, numberOfDimensions );
@@ -161,8 +148,8 @@ public class Frangi_<T extends RealType<T>> implements PlugIn {
 			   interest, used for calculating the second
 			   derivatives at that point: */
 
-			LocalizableByDimCursor<T> ahead = input.createLocalizableByDimCursor( osmf );
-			LocalizableByDimCursor<T> behind = input.createLocalizableByDimCursor( osmf );
+			RandomAccess<T> ahead = Views.extendMirrorSingle( input ).randomAccess();
+			RandomAccess<T> behind = Views.extendMirrorSingle( input ).randomAccess();
 
 			AbsoluteFloatComparator comparator = new AbsoluteFloatComparator();
 
@@ -180,8 +167,8 @@ public class Frangi_<T extends RealType<T>> implements PlugIn {
 				for( int m = 0; m < numberOfDimensions; ++m )
 					for( int n = 0; n < numberOfDimensions; ++n ) {
 
-						ahead.moveTo( cursor );
-						behind.moveTo( cursor );
+						ahead.setPosition( cursor );
+						behind.setPosition( cursor );
 
 						ahead.fwd(m);
 						behind.bck(m);
@@ -189,12 +176,12 @@ public class Frangi_<T extends RealType<T>> implements PlugIn {
 						ahead.fwd(n);
 						behind.fwd(n);
 
-						float firstDerivativeA = (ahead.getType().getRealFloat() - behind.getType().getRealFloat()) / (2 * spacing[m]);
+						float firstDerivativeA = (ahead.get().getRealFloat() - behind.get().getRealFloat()) / (2 * spacing[m]);
 
 						ahead.bck(n); ahead.bck(n);
 						behind.bck(n); behind.bck(n);
 
-						float firstDerivativeB = (ahead.getType().getRealFloat() - behind.getType().getRealFloat()) / (2 * spacing[m]);
+						float firstDerivativeB = (ahead.get().getRealFloat() - behind.get().getRealFloat()) / (2 * spacing[m]);
 
 						double value = (firstDerivativeA - firstDerivativeB) / (2 * spacing[n]);
 						hessian.set(m,n,value);
@@ -262,20 +249,11 @@ public class Frangi_<T extends RealType<T>> implements PlugIn {
 					minimumVesselness = Math.min(v,minimumVesselness);
 				}
 
-				resultCursor.moveTo(cursor);
-				resultCursor.getType().set( (float)v );
+				resultCursor.setPosition(cursor);
+				resultCursor.get().set( (float)v );
 
 				++ pointsDone;
 			}
-
-			// Remember to close all the cursors:
-
-			cursor.close();
-
-			ahead.close();
-			behind.close();
-
-			resultCursor.close();
 
 			this.result = resultImage;
 			return result;
@@ -320,17 +298,23 @@ public class Frangi_<T extends RealType<T>> implements PlugIn {
 
 		int processors = Runtime.getRuntime().availableProcessors();
 
-		image = ImagePlusAdapter.wrap(input);
+		image = (Img< T >)ImagePlusAdapter.wrap( input );
 
-		float [] spacing = image.getCalibration();
+		float[] spacing = new float[ image.numDimensions() ];
+		
+		spacing[ 0 ] = (float)input.getCalibration().pixelWidth;
+		spacing[ 1 ] = (float)input.getCalibration().pixelHeight;
+
+		if ( spacing.length > 2 )
+			spacing[ 2 ] = (float)input.getCalibration().pixelDepth;
 
 		double range = maximumScale - minimumScale;
 		double increment = 0;
 		if( scales > 1 )
 			increment = range / (scales - 1);
 
-		ArrayList< Image<FloatType> > vesselImages =
-			new ArrayList< Image<FloatType> >();
+		ArrayList< Img<FloatType> > vesselImages =
+			new ArrayList< Img<FloatType> >();
 
 		ExecutorService es = Executors.newFixedThreadPool(processors);
 
@@ -353,39 +337,23 @@ public class Frangi_<T extends RealType<T>> implements PlugIn {
 			for( int i = 0; i < newSpacing.length; ++i )
 				sigmas[i] = newSpacing[i] / spacing[i];
 
-			GaussianConvolutionReal<T> gauss =
-				new GaussianConvolutionReal<T>(
-					image,
-					new OutOfBoundsStrategyMirrorFactory<T>(),
-					sigmas );
-
-			gauss.setNumThreads( processors );
-
-			IJ.showStatus("Running Gaussian convolution at scale "+formatReal(currentScale)+"...");
-
-			/* FIXME: add some facility to report progress
-			   of the Gaussian convolution. */
-
-			if ( !gauss.checkInput() || !gauss.process() ) {
-				IJ.error( "Gaussian Convolution failed: " + gauss.getErrorMessage() );
-				return null;
+			final Img< T > result = image.factory().create( image, image.firstElement() );
+			try
+			{
+				Gauss3.gauss( sigmas, Views.extendMirrorSingle( image ), result );
 			}
+			catch (IncompatibleTypeException e) { e.printStackTrace(); }
 
-			final Image<T> result = gauss.getResult();
 
-			if( showGaussianImages ) {
-				ImagePlus gaussianSmoothedImage =
-					ImageJFunctions.copyToImagePlus( result );
-				gaussianSmoothedImage.setTitle("Gaussian smoothed images at scale "+scaleIndex);
-				gaussianSmoothedImage.show();
-			}
+			if( showGaussianImages )
+				ImageJFunctions.wrap( result, "Gaussian smoothed images at scale "+scaleIndex ).duplicate().show();
 
 			VesselnessCalculator<T> calculator =
 				new VesselnessCalculator<T>( result, newSpacing, scaleIndex, progress );
 			calculators.add( calculator );
 		}
 
-		List<Future<Image<FloatType>>> futures = null;
+		List<Future<Img<FloatType>>> futures = null;
 
 		/* Actually run all the VesselnessCalculators with
 		   invokeAll, which returns when all have finished */
@@ -401,7 +369,7 @@ public class Frangi_<T extends RealType<T>> implements PlugIn {
 		   was an exception thrown: */
 
 		try {
-			for( Future<Image<FloatType>> future : futures ) {
+			for( Future<Img<FloatType>> future : futures ) {
 				future.get();
 			}
 		} catch( InterruptedException id ) {
@@ -418,11 +386,10 @@ public class Frangi_<T extends RealType<T>> implements PlugIn {
 
 		int scale = 0;
 		for( VesselnessCalculator vc : calculators ) {
-			Image<FloatType> image = vc.getResult();
+			Img<FloatType> image = vc.getResult();
 			vesselImages.add( image );
 			if( showFilteredImages ) {
-				ImagePlus imagePlusVersion = ImageJFunctions.copyToImagePlus( image );
-				imagePlusVersion.setTitle("Filtered image at scale "+scale);
+				ImagePlus imagePlusVersion = ImageJFunctions.wrap( image, "Filtered image at scale "+scale ).duplicate();
 				imagePlusVersion.setDisplayRange( vc.getMinimumVesselness(),
 								  0.5 * vc.getMaximumVesselness() );
 
@@ -436,29 +403,23 @@ public class Frangi_<T extends RealType<T>> implements PlugIn {
 		   scale, by taking the maximum value at each point in
 		   the image across all the vesselness images */
 
-		ImageFactory<FloatType> floatFactory = new ImageFactory<FloatType>(
-			new FloatType(),
-			new ArrayContainerFactory() );
+		ImgFactory<FloatType> floatFactory = new ArrayImgFactory<FloatType>();
 
-		Image<FloatType> resultImage = floatFactory.createImage( image.getDimensions() );
-		LocalizableCursor<FloatType> resultCursor = resultImage.createLocalizableCursor();
+		Img<FloatType> resultImage = floatFactory.create( image, new FloatType() );
+		Cursor<FloatType> resultCursor = resultImage.localizingCursor();
 
-		ImageFactory<ByteType> byteFactory = new ImageFactory<ByteType>(
-			new ByteType(),
-			new ArrayContainerFactory() );
-
-		Image<FloatType> whichImage = null;
-		LocalizableCursor<FloatType> whichCursor = null;
+		Img<FloatType> whichImage = null;
+		Cursor<FloatType> whichCursor = null;
 
 		if( showWhichScales ) {
-			whichImage = floatFactory.createImage( image.getDimensions() );
-			whichCursor = whichImage.createLocalizableCursor();
+			whichImage = floatFactory.create( image, new FloatType() );
+			whichCursor = whichImage.localizingCursor();
 		}
 
-		ArrayList<LocalizableCursor<FloatType>> cursors =
-			new ArrayList<LocalizableCursor<FloatType>>();
-		for( Image<FloatType> vesselImage : vesselImages ) {
-			cursors.add(vesselImage.createLocalizableCursor());
+		ArrayList<Cursor<FloatType>> cursors =
+			new ArrayList<Cursor<FloatType>>();
+		for( Img<FloatType> vesselImage : vesselImages ) {
+			cursors.add(vesselImage.localizingCursor());
 		}
 
 		float maximumValueInResult = Float.MIN_VALUE;
@@ -474,9 +435,9 @@ public class Frangi_<T extends RealType<T>> implements PlugIn {
 			int bestScale = 0;
 			float largestValue = Float.MIN_VALUE;
 			int scaleIndex = 0;
-			for( LocalizableCursor<FloatType> cursor : cursors ) {
+			for( Cursor<FloatType> cursor : cursors ) {
 				cursor.fwd();
-				float v = cursor.getType().getRealFloat();
+				float v = cursor.get().getRealFloat();
 				if( v > largestValue ) {
 					bestScale = scaleIndex + 1;
 					largestValue = v;
@@ -484,23 +445,16 @@ public class Frangi_<T extends RealType<T>> implements PlugIn {
 				++ scaleIndex;
 			}
 			if( showWhichScales )
-				whichCursor.getType().set( bestScale == 0 ? 0 : (float)minimumScale + (bestScale - 1) * (float)increment );
-			resultCursor.getType().set(largestValue);
+				whichCursor.get().set( bestScale == 0 ? 0 : (float)minimumScale + (bestScale - 1) * (float)increment );
+			resultCursor.get().set(largestValue);
 			maximumValueInResult = Math.max(maximumValueInResult,largestValue);
 			minimumValueInResult = Math.min(minimumValueInResult,largestValue);
 		}
 
 		/* Remember to close all of the cursors */
 
-		for( LocalizableCursor<FloatType> cursor : cursors )
-			cursor.close();
-		if( showWhichScales )
-			whichCursor.close();
-		resultCursor.close();
-
 		if( showWhichScales ) {
-			ImagePlus whichImagePlus = ImageJFunctions.copyToImagePlus( whichImage, ImageJFunctions.GRAY32 );
-			whichImagePlus.setTitle("Scales used");
+			ImagePlus whichImagePlus = ImageJFunctions.wrap( whichImage, "Scales used" ).duplicate();
 			whichImagePlus.getProcessor().setMinAndMax(0,maximumScale);
 			whichImagePlus.show();
 		}
@@ -508,10 +462,9 @@ public class Frangi_<T extends RealType<T>> implements PlugIn {
 		if( progress != null )
 			progress.done();
 
-		ImagePlus resultImagePlus = ImageJFunctions.copyToImagePlus( resultImage );
+		ImagePlus resultImagePlus = ImageJFunctions.wrap( resultImage, "vesselness of "+input.getTitle() ).duplicate();
 		resultImagePlus.setDisplayRange( minimumValueInResult,
 						 0.5 * maximumValueInResult );
-		resultImagePlus.setTitle("vesselness of "+input.getTitle());
 		resultImagePlus.setCalibration( input.getCalibration() );
 		return resultImagePlus;
 	}

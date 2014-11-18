@@ -39,11 +39,6 @@
 
 	<dependencies>
 		<!-- Fiji dependencies -->
-		<dependency>
-			<groupId>sc.fiji</groupId>
-			<artifactId>legacy-imglib1</artifactId>
-			<version>1.0.0-DEPRECATED</version>
-		</dependency>
 
 		<!-- ImageJ dependencies -->
 		<dependency>
@@ -55,6 +50,14 @@
 		<dependency>
 			<groupId>gov.nist.math</groupId>
 			<artifactId>jama</artifactId>
+		</dependency>
+		<dependency>
+			<groupId>net.imglib2</groupId>
+			<artifactId>imglib2-algorithm</artifactId>
+		</dependency>
+		<dependency>
+			<groupId>net.imglib2</groupId>
+			<artifactId>imglib2-ij</artifactId>
 		</dependency>
 	</dependencies>
 
