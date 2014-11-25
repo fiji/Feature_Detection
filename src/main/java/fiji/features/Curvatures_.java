@@ -21,8 +21,6 @@
 
 package fiji.features;
 
-import Jama.EigenvalueDecomposition;
-import Jama.Matrix;
 import ij.IJ;
 import ij.ImagePlus;
 import ij.plugin.PlugIn;
@@ -34,15 +32,19 @@ import java.util.Comparator;
 import net.imglib2.Cursor;
 import net.imglib2.RandomAccess;
 import net.imglib2.algorithm.gauss3.Gauss3;
+import net.imglib2.exception.ImgLibException;
 import net.imglib2.exception.IncompatibleTypeException;
 import net.imglib2.img.ImagePlusAdapter;
 import net.imglib2.img.Img;
 import net.imglib2.img.ImgFactory;
-import net.imglib2.img.array.ArrayImgFactory;
 import net.imglib2.img.display.imagej.ImageJFunctions;
+import net.imglib2.img.imageplus.ImagePlusImg;
+import net.imglib2.img.imageplus.ImagePlusImgFactory;
 import net.imglib2.type.numeric.RealType;
 import net.imglib2.type.numeric.real.FloatType;
 import net.imglib2.view.Views;
+import Jama.EigenvalueDecomposition;
+import Jama.Matrix;
 
 public class Curvatures_<T extends RealType<T>> implements PlugIn {
 
@@ -69,7 +71,7 @@ public class Curvatures_<T extends RealType<T>> implements PlugIn {
 
 		Cursor<T> cursor = input.localizingCursor();
 
-		ImgFactory<FloatType> floatFactory = new ArrayImgFactory<FloatType>();
+		ImgFactory<FloatType> floatFactory = new ImagePlusImgFactory<FloatType>();
 
 		ArrayList< Img<FloatType> > eigenvalueImages = new ArrayList< Img<FloatType> >();
 		ArrayList< RandomAccess<FloatType> > eCursors = new ArrayList< RandomAccess<FloatType> >();
@@ -177,12 +179,31 @@ public class Curvatures_<T extends RealType<T>> implements PlugIn {
 		}
 		catch (IncompatibleTypeException e) { e.printStackTrace(); }
 
-		ImageJFunctions.wrap( result, "Blurred" ).duplicate().show();
+		ImagePlus imp = null;
+		
+		if ( result instanceof ImagePlusImg )
+			try { imp = ((ImagePlusImg)result).getImagePlus(); } catch (ImgLibException e) {}
+
+		if ( imp == null )
+			imp = ImageJFunctions.wrap( result, "Blurred" ).duplicate();
+		else
+			imp.setTitle( "Blurred" );
+
+		imp.show();
 
 		ArrayList< Img<FloatType> > eigenvalueImages = hessianEigenvalueImages(result,spacing);
 
-		for( Img<FloatType> resultImage : eigenvalueImages ) {
-			ImageJFunctions.wrap( resultImage, "EigenValues" ).duplicate().show();
+		for( Img<FloatType> resultImage : eigenvalueImages )
+		{
+			imp = null;
+
+			if ( result instanceof ImagePlusImg )
+				try { imp = ((ImagePlusImg)resultImage).getImagePlus(); } catch (ImgLibException e) {}
+
+			if ( imp == null )
+				imp = ImageJFunctions.wrap( resultImage, "EigenValues" ).duplicate();
+			else
+				imp.setTitle( "EigenValues" );
 		}
 	}
 }

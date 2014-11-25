@@ -21,8 +21,6 @@
 
 package fiji.features;
 
-import Jama.EigenvalueDecomposition;
-import Jama.Matrix;
 import ij.IJ;
 import ij.ImagePlus;
 import ij.gui.GenericDialog;
@@ -42,16 +40,19 @@ import java.util.concurrent.Future;
 import net.imglib2.Cursor;
 import net.imglib2.RandomAccess;
 import net.imglib2.algorithm.gauss3.Gauss3;
+import net.imglib2.exception.ImgLibException;
 import net.imglib2.exception.IncompatibleTypeException;
 import net.imglib2.img.ImagePlusAdapter;
 import net.imglib2.img.Img;
 import net.imglib2.img.ImgFactory;
-import net.imglib2.img.array.ArrayImgFactory;
 import net.imglib2.img.display.imagej.ImageJFunctions;
+import net.imglib2.img.imageplus.ImagePlusImg;
+import net.imglib2.img.imageplus.ImagePlusImgFactory;
 import net.imglib2.type.numeric.RealType;
-import net.imglib2.type.numeric.integer.ByteType;
 import net.imglib2.type.numeric.real.FloatType;
 import net.imglib2.view.Views;
+import Jama.EigenvalueDecomposition;
+import Jama.Matrix;
 
 public class Frangi_<T extends RealType<T>> implements PlugIn {
 
@@ -133,7 +134,7 @@ public class Frangi_<T extends RealType<T>> implements PlugIn {
 			   we supply mirror values: */
 			Cursor<T> cursor = input.localizingCursor();
 
-			ImgFactory<FloatType> floatFactory = new ArrayImgFactory<FloatType>();
+			ImgFactory<FloatType> floatFactory = new ImagePlusImgFactory<FloatType>();
 
 			Img<FloatType> resultImage = floatFactory.create( input, new FloatType() );
 			RandomAccess<FloatType> resultCursor = resultImage.randomAccess();
@@ -346,7 +347,19 @@ public class Frangi_<T extends RealType<T>> implements PlugIn {
 
 
 			if( showGaussianImages )
-				ImageJFunctions.wrap( result, "Gaussian smoothed images at scale "+scaleIndex ).duplicate().show();
+			{
+				ImagePlus imp = null;
+
+				if ( result instanceof ImagePlusImg )
+					try { imp = ((ImagePlusImg)result).getImagePlus(); } catch (ImgLibException e) {}
+
+				if ( imp == null )
+					imp = ImageJFunctions.wrap( result, "Gaussian smoothed images at scale "+scaleIndex ).duplicate();
+				else
+					imp.setTitle( "Gaussian smoothed images at scale "+scaleIndex );
+
+				imp.show();
+			}
 
 			VesselnessCalculator<T> calculator =
 				new VesselnessCalculator<T>( result, newSpacing, scaleIndex, progress );
@@ -389,7 +402,16 @@ public class Frangi_<T extends RealType<T>> implements PlugIn {
 			Img<FloatType> image = vc.getResult();
 			vesselImages.add( image );
 			if( showFilteredImages ) {
-				ImagePlus imagePlusVersion = ImageJFunctions.wrap( image, "Filtered image at scale "+scale ).duplicate();
+				ImagePlus imagePlusVersion = null;//ImageJFunctions.wrap( image, "Filtered image at scale "+scale ).duplicate();
+
+				if ( image instanceof ImagePlusImg )
+					try { imagePlusVersion = ((ImagePlusImg)image).getImagePlus(); } catch (ImgLibException e) {}
+
+				if ( imagePlusVersion == null )
+					imagePlusVersion = ImageJFunctions.wrap( image, "Filtered image at scale "+scale ).duplicate();
+				else
+					imagePlusVersion.setTitle( "Filtered image at scale "+scale );
+
 				imagePlusVersion.setDisplayRange( vc.getMinimumVesselness(),
 								  0.5 * vc.getMaximumVesselness() );
 
@@ -403,7 +425,7 @@ public class Frangi_<T extends RealType<T>> implements PlugIn {
 		   scale, by taking the maximum value at each point in
 		   the image across all the vesselness images */
 
-		ImgFactory<FloatType> floatFactory = new ArrayImgFactory<FloatType>();
+		ImgFactory<FloatType> floatFactory = new ImagePlusImgFactory<FloatType>();
 
 		Img<FloatType> resultImage = floatFactory.create( image, new FloatType() );
 		Cursor<FloatType> resultCursor = resultImage.localizingCursor();
@@ -454,7 +476,16 @@ public class Frangi_<T extends RealType<T>> implements PlugIn {
 		/* Remember to close all of the cursors */
 
 		if( showWhichScales ) {
-			ImagePlus whichImagePlus = ImageJFunctions.wrap( whichImage, "Scales used" ).duplicate();
+			ImagePlus whichImagePlus = null;
+			
+			if ( whichImage instanceof ImagePlusImg )
+				try { whichImagePlus = ((ImagePlusImg)whichImage).getImagePlus(); } catch (ImgLibException e) {}
+
+			if ( whichImagePlus == null )
+				whichImagePlus = ImageJFunctions.wrap( whichImage, "Scales used" ).duplicate();
+			else
+				whichImagePlus.setTitle( "Scales used" );
+
 			whichImagePlus.getProcessor().setMinAndMax(0,maximumScale);
 			whichImagePlus.show();
 		}
@@ -462,7 +493,16 @@ public class Frangi_<T extends RealType<T>> implements PlugIn {
 		if( progress != null )
 			progress.done();
 
-		ImagePlus resultImagePlus = ImageJFunctions.wrap( resultImage, "vesselness of "+input.getTitle() ).duplicate();
+		ImagePlus resultImagePlus = null;
+
+		if ( resultImage instanceof ImagePlusImg )
+			try { resultImagePlus = ((ImagePlusImg)resultImage).getImagePlus(); } catch (ImgLibException e) {}
+
+		if ( resultImagePlus == null )
+			resultImagePlus = ImageJFunctions.wrap( resultImage, "vesselness of "+input.getTitle() ).duplicate();
+		else
+			resultImagePlus.setTitle( "vesselness of "+input.getTitle() );
+
 		resultImagePlus.setDisplayRange( minimumValueInResult,
 						 0.5 * maximumValueInResult );
 		resultImagePlus.setCalibration( input.getCalibration() );
