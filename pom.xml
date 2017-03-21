@@ -76,8 +76,8 @@
 		<url>https://github.com/fiji/Feature_Detection/issues</url>
 	</issueManagement>
 	<ciManagement>
-		<system>Jenkins</system>
-		<url>http://jenkins.imagej.net/job/Feature_Detection/</url>
+		<system>Travis CI</system>
+		<url>https://travis-ci.org/fiji/Feature_Detection</url>
 	</ciManagement>
 
 	<properties>
